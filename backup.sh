@@ -11,11 +11,12 @@
 
 ####### BEGIN CONFIGURABLE PARAMETERS #######
 
+
 # Data to be backed up. Should be absolute path (if this script will be called from cron, for example)
-DATA_DIR=/raid/data
+DATA_DIR=/tmp/data
 
 # Directory to store tarballs
-BACKUP_DIR=/raid/backup
+BACKUP_DIR=/tmp/backup
 
 # How many runs per email?
 EMAIL_LOG_PERIOD=7
@@ -24,13 +25,8 @@ GLACIER_CLI="./glacier.py"
 AWS_ACCESS_KEY_ID=xxx
 AWS_SECRET_ACCESS_KEY=xxx
 AWS_REGION=us-east-1
-AWS_VAULT_NAME=BackupVault
+AWS_VAULT_NAME=backup
 
-# Email address to send logs to
-# make sure mail command works (eg. using ssmtp)
-# to test -
-# echo "Mail body" |mail --append=FROM:example@example.com -s "subject" -t example@example.com
-EMAIL_ADDRESS=example@example.com
 
 ####### END CONFIGURABLE PARAMETERS #######
 
@@ -56,10 +52,10 @@ if [ ! -d "$BACKUP_DIR" ]; then
 fi
 
 if [ -e "$BACKUP_DIR/lock" ]; then
-     echo "Instance terminated. Another instance running"
+     echo "Instance terminated. Another instance maybe running, if note remove file $BACKUP_DIR/lock"
      
      # we have to report this right away because otherwise if an instance hangs, the user may never notice
-     cat "$LOGFILE" |mail --append=FROM:$EMAIL_ADDRESS -s "Backup log" -t $EMAIL_ADDRESS
+     cat "$LOGFILE" | ./notify.py 
      
      exit 3
 fi
@@ -90,12 +86,12 @@ echo "`ls -lah "$TAR_PATH" | awk '{ print $5 }'` bytes"
 export AWS_ACCESS_KEY_ID
 export AWS_SECRET_ACCESS_KEY
 
-$GLACIER_CLI --region $AWS_REGION archive upload --name $TAR_FILENAME $AWS_VAULT_NAME $TAR_PATH
+$GLACIER_CLI upload --region $AWS_REGION $AWS_VAULT_NAME $TAR_PATH
 
 echo ""
 
 if [ `expr $INCREMENT_COUNT % $EMAIL_LOG_PERIOD` -eq 0 ]; then
-     cat "$LOGFILE" |mail --append=FROM:$EMAIL_ADDRESS -s "Backup log" -t $EMAIL_ADDRESS
+     cat "$LOGFILE" | ./notify.py 
      rm "$LOGFILE"
 fi
 
