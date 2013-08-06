@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# Copyright (C) 2013 Matthew Lai
+# This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as 
+# published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty 
+# of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with this program. If not, see http://www.gnu.org/licenses/.
+
+####### BEGIN CONFIGURABLE PARAMETERS #######
+
+# Data to be backed up. Should be absolute path (if this script will be called from cron, for example)
+DATA_DIR=/raid/data
+
+# Directory to store tarballs
+BACKUP_DIR=/raid/backup
+
+# How many runs per email?
+EMAIL_LOG_PERIOD=7
+
+GLACIER_CLI="./glacier.py"
+AWS_ACCESS_KEY_ID=xxx
+AWS_SECRET_ACCESS_KEY=xxx
+AWS_REGION=us-east-1
+AWS_VAULT_NAME=BackupVault
+
+# Email address to send logs to
+# make sure mail command works (eg. using ssmtp)
+# to test -
+# echo "Mail body" |mail --append=FROM:example@example.com -s "subject" -t example@example.com
+EMAIL_ADDRESS=example@example.com
+
+####### END CONFIGURABLE PARAMETERS #######
+
+DATE_STR=`date -u +%Y%m%d%H%M%S`
+
+typeset -i INCREMENT_COUNT
+INCREMENT_COUNT=0
+
+LOGFILE="$BACKUP_DIR/log.txt"
+
+exec >> "$LOGFILE" 2>&1
+
+date
+
+if [ ! -d "$DATA_DIR" ]; then
+     echo "Data directory does not exist or is not a directory"
+     exit 1
+fi
+
+if [ ! -d "$BACKUP_DIR" ]; then
+     echo "Backup directory does not exist or is not a directory"
+     exit 2
+fi
+
+if [ -e "$BACKUP_DIR/lock" ]; then
+     echo "Instance terminated. Another instance running"
+     
+     # we have to report this right away because otherwise if an instance hangs, the user may never notice
+     cat "$LOGFILE" |mail --append=FROM:$EMAIL_ADDRESS -s "Backup log" -t $EMAIL_ADDRESS
+     
+     exit 3
+fi
+
+touch "$BACKUP_DIR/lock"
+
+if [ ! -f "$BACKUP_DIR/archive.snar" ]; then
+     echo "snar file not found, creating level 0 dump"
+     rm -f "$BACKUP_DIR/inc_count.txt"
+fi
+
+if [ -f "$BACKUP_DIR/inc_count.txt" ];  then
+     INCREMENT_COUNT=`cat "$BACKUP_DIR/inc_count.txt"`
+fi
+
+echo `expr $INCREMENT_COUNT + 1` > "$BACKUP_DIR/inc_count.txt"
+
+TAR_FILENAME="archive".`date -u +%Y%m%d%H%M%S`.$INCREMENT_COUNT.tar.gz
+TAR_PATH="$BACKUP_DIR/$TAR_FILENAME"
+
+echo "Creating $TAR_FILENAME"
+
+tar --create -z --listed-incremental="$BACKUP_DIR/archive.snar" -f "$TAR_PATH" "$DATA_DIR"
+tar --list -z --incremental --verbose --verbose -f "$TAR_PATH"
+
+echo "`ls -lah "$TAR_PATH" | awk '{ print $5 }'` bytes"
+
+export AWS_ACCESS_KEY_ID
+export AWS_SECRET_ACCESS_KEY
+
+$GLACIER_CLI --region $AWS_REGION archive upload --name $TAR_FILENAME $AWS_VAULT_NAME $TAR_PATH
+
+echo ""
+
+if [ `expr $INCREMENT_COUNT % $EMAIL_LOG_PERIOD` -eq 0 ]; then
+     cat "$LOGFILE" |mail --append=FROM:$EMAIL_ADDRESS -s "Backup log" -t $EMAIL_ADDRESS
+     rm "$LOGFILE"
+fi
+
+rm "$BACKUP_DIR/lock"
+
