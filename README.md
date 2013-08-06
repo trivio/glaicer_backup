@@ -7,7 +7,7 @@ This version uses Amazon Simle Notification Service to deliver
 backup notifications.
 
 Prerequisites
-============
+--------------
 
 From the amazon console 
 
@@ -19,7 +19,7 @@ From the amazon console
 * Create one or more e-mail  subscriptions to receive notifications from the backup system.
 
 Installation
-============
+------------
 
 ```
  $ easy_install virtualenv # if virtualenv not installed
@@ -35,3 +35,30 @@ Installation
  $ cd /etc/cron.daily
  $ sudo ln -s /path/to/glaicer_backup .
 ```
+
+Notes
+-----
+
+The script works by using tar to create an incremental backup on the local server. You need at least
+as much free disk space on the server as you intend to backup to make the local tar ball.
+
+Incremental files can be removed after they are uploaded to free up space, the script makes no attempt
+to do so on it's own.
+
+Also note there is no restore mechanism, it's a manual process and it will take some time to complete. Possibly
+days: 
+
+* To do so, you'll first need to start an Amazon Glaicer restore for each incremental backup. 
+  This could take up to  4-5 hours to complete. When it dose all e-mails registered per 
+  the instructions above will receive an e-mail noting that the archive is ready for downloaded.
+
+* Log on to the server where you wish the archive to be restored, and use a tool like curl to download the archive.
+
+* Untar the archives in order from earliest to newest
+
+
+
+
+
+
+
