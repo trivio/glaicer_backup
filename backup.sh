@@ -12,24 +12,15 @@
 ####### BEGIN CONFIGURABLE PARAMETERS #######
 
 
-# Data to be backed up. Should be absolute path (if this script will be called from cron, for example)
-DATA_DIR=/tmp/data
+# Change config by editing the file .env in the same dir as this
+# script, see env.sample for examples
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+[[ -f "$DIR/.env" ]] && . "$DIR/.env"
 
-# Directory to store tarballs
-BACKUP_DIR=/tmp/backup
+mkdir -p $BACKUP_DIR
 
-# How many runs per email?
-EMAIL_LOG_PERIOD=7
-
-GLACIER_CLI="./glacier.py"
-AWS_ACCESS_KEY_ID=xxx
-AWS_SECRET_ACCESS_KEY=xxx
-AWS_REGION=us-east-1
-AWS_VAULT_NAME=backup
-
-
-####### END CONFIGURABLE PARAMETERS #######
-
+# re export SNS_TOPIC for the notify script
+export SNS_TOPIC
 DATE_STR=`date -u +%Y%m%d%H%M%S`
 
 typeset -i INCREMENT_COUNT
